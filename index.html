@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>RPM Gauge Solid Arc</title>
+<style>
+  body {
+    margin: 0; padding: 0;
+    background: #222;
+    color: #eee;
+    font-family: Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+  }
+  canvas {
+    background: transparent;
+  }
+</style>
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+</head>
+<body>
+<canvas id="gauge" width="600" height="350"></canvas>
+
+<script>
+const canvas = document.getElementById('gauge');
+const ctx = canvas.getContext('2d');
+const centerX = canvas.width / 2;
+const centerY = canvas.height * 0.9;
+const radius = 200;
+
+let rpmValue = 0;
+const maxRPM = 10000;
+
+function drawGauge(rpm) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // วาดเกจครึ่งวงกลม เส้นเดียว (สีเทา background)
+  ctx.beginPath();
+  ctx.lineWidth = 20;
+  ctx.strokeStyle = '#444';
+  ctx.arc(centerX, centerY, radius, Math.PI, 0, false);
+  ctx.stroke();
+
+  // วาดเกจครึ่งวงกลมแสดงค่า (สีเขียว)
+  const angle = Math.PI + (rpm / maxRPM) * Math.PI;
+  ctx.beginPath();
+  ctx.lineWidth = 20;
+  ctx.strokeStyle = '#4caf50';
+  ctx.arc(centerX, centerY, radius, Math.PI, angle, false);
+  ctx.stroke();
+
+  // วาดสเกลเลข 0 1000 2000 ... 10000 รอบขอบเกจ
+  ctx.fillStyle = '#eee';
+  ctx.font = '14px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  const step = 1000;
+  for(let val=0; val<=maxRPM; val+=step) {
+    const a = Math.PI + (val / maxRPM) * Math.PI;
+    const x = centerX + Math.cos(a) * (radius + 30);
+    const y = centerY + Math.sin(a) * (radius + 30);
+    ctx.fillText(val, x, y);
+  }
+
+  // ตัวเลข RPM กลางวง
+  ctx.fillStyle = '#4caf50';
+  ctx.font = '52px Arial';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(rpm.toFixed(1), centerX, centerY - 50);
+  ctx.font = '24px Arial';
+  ctx.fillText('RPM', centerX, centerY - 15);
+}
+
+// เชื่อมต่อ MQTT Broker (เปลี่ยน URL ตามของคุณ)
+const client = mqtt.connect('ws://45.141.27.196:9001');
+
+client.on('connect', () => {
+  console.log('Connected to MQTT Broker');
+  client.subscribe('sensor/rpm');
+});
+
+client.on('message', (topic, message) => {
+  if (topic === 'sensor/rpm') {
+    const rpmFromSensor = parseFloat(message.toString());
+    if (!isNaN(rpmFromSensor)) {
+      rpmValue = Math.min(Math.max(rpmFromSensor, 0), maxRPM);
+      drawGauge(rpmValue);
+    }
+  }
+});
+
+client.on('error', (error) => {
+  console.error('MQTT Error:', error);
+});
+
+// วาดครั้งแรก
+drawGauge(rpmValue);
+</script>
+</body>
+</html>
